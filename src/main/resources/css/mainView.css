@@ -1,0 +1,19 @@
+.nav:hover{
+    -fx-background-color: rgba(171, 190, 196, 0.69);
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.logout:hover{
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.table-view .column-header{
+    -fx-background-color:  #4059a9;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: white;
+
+}
