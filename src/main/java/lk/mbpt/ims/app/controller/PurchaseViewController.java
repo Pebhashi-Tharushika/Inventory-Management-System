@@ -10,11 +10,14 @@ import javafx.event.ActionEvent;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.paint.Color;
 import lk.mbpt.ims.app.db.DBConnection;
+import lk.mbpt.ims.app.model.Item;
 import lk.mbpt.ims.app.model.PurchaseOrder;
+import lk.mbpt.ims.app.model.Supplier;
 import lk.mbpt.ims.app.util.Status;
 import net.sf.jasperreports.engine.JRException;
 import net.sf.jasperreports.engine.JasperFillManager;
@@ -24,6 +27,7 @@ import net.sf.jasperreports.engine.util.JRLoader;
 import net.sf.jasperreports.view.JasperViewer;
 import org.controlsfx.control.textfield.TextFields;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.text.DecimalFormat;
@@ -101,7 +105,7 @@ public class PurchaseViewController {
         });
 
         /* reset fields when starting to type */
-        JFXTextField[] jfxTextFields = {txtSupplierId, txtItemCode, txtUnitPrice, txtQty};
+        JFXTextField[] jfxTextFields = {txtSupplierId, txtItemCode, txtUnitPrice, txtQty, txtItemCode, txtSupplierId};
         for (JFXTextField txt : jfxTextFields) {
             txt.textProperty().addListener((observableValue, previous, current) -> {
                 setFocusColorAndUnFocusColor(txt, Color.rgb(64, 89, 169), Color.rgb(77, 77, 77));
@@ -172,12 +176,10 @@ public class PurchaseViewController {
 
     private void setFocusColorAndUnFocusColor(Node node, Color focusColor, Color unFocusColor) {
         if (node instanceof JFXTextField) {
-            System.out.println("txt");
             JFXTextField txt = (JFXTextField) node;
             txt.setFocusColor(focusColor);
             txt.setUnFocusColor(unFocusColor);
         } else if (node instanceof JFXComboBox) {
-            System.out.println("combo");
             JFXComboBox cmb = (JFXComboBox) node;
             cmb.setFocusColor(focusColor);
             cmb.setUnFocusColor(unFocusColor);
@@ -229,7 +231,7 @@ public class PurchaseViewController {
         cmbUnits.getSelectionModel().clearSelection();
         if (!txtSearch.isFocused()) txtSupplierId.requestFocus();
 
-        JFXTextField[] jfxTextFields = {txtSupplierId, txtItemCode, txtUnitPrice, txtQty};
+        JFXTextField[] jfxTextFields = {txtSupplierId, txtItemCode, txtUnitPrice, txtQty, txtItemCode, txtSupplierId};
         for (JFXTextField txt : jfxTextFields) {
             setFocusColorAndUnFocusColor(txt, Color.rgb(64, 89, 169), Color.rgb(77, 77, 77));
         }
@@ -259,12 +261,15 @@ public class PurchaseViewController {
         Status status = rdoOpen.isSelected() ? Status.OPEN : Status.CLOSED;
         PurchaseOrder newPurchaseOrder = new PurchaseOrder(null, itemCode, supplierId, qty, unitPrice, orderDate, uom, status);
 
-        Connection connection = DBConnection.getInstance().getConnection();
         try {
+            Connection connection = DBConnection.getInstance().getConnection();
             String sql;
             PreparedStatement stm;
-
             PurchaseOrder selectedPurchaseOrder = tblPurchases.getSelectionModel().getSelectedItem();
+
+            connection.setAutoCommit(false); // Starting a new transaction context
+
+
             if (selectedPurchaseOrder == null) {
                 sql = "INSERT INTO purchase_order (item_code, unit_price, qty, unit_of_measure, supplier_id, order_date, total, status) VALUES (?, ?, ?, ?, ?, ?, ?,?)";
                 stm = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -284,6 +289,9 @@ public class PurchaseViewController {
                 newPurchaseOrder.setOrderId(generatedId);
                 tblPurchases.getItems().add(newPurchaseOrder);
 
+                BigDecimal currentQty = findItemByItemCode(newPurchaseOrder.getItemCode()).getQty();
+                updateItemStock(currentQty.add(newPurchaseOrder.getQty()), newPurchaseOrder.getItemCode());
+
             } else {
                 sql = "UPDATE purchase_order SET item_code=?, unit_price=?, qty=?, unit_of_measure=?, supplier_id=?, order_date=?, total=?, status=? WHERE order_id=?";
                 stm = connection.prepareStatement(sql);
@@ -296,8 +304,12 @@ public class PurchaseViewController {
                 stm.setBigDecimal(7, newPurchaseOrder.getTotal());
                 stm.setString(8, String.valueOf(newPurchaseOrder.getStatus()));
                 stm.setInt(9, Integer.parseInt(txtOrderId.getText().substring(3)));
-
                 stm.executeUpdate();
+
+                BigDecimal diff = selectedPurchaseOrder.getQty().subtract(newPurchaseOrder.getQty());
+                BigDecimal currentQty = findItemByItemCode(newPurchaseOrder.getItemCode()).getQty();
+                updateItemStock(selectedPurchaseOrder.getQty().compareTo(newPurchaseOrder.getQty())<0 ? currentQty.add(diff.abs()) : currentQty.subtract(diff.abs()), newPurchaseOrder.getItemCode());
+
                 selectedPurchaseOrder.setItemCode(newPurchaseOrder.getItemCode());
                 selectedPurchaseOrder.setUnitPrice(newPurchaseOrder.getUnitPrice());
                 selectedPurchaseOrder.setQty(newPurchaseOrder.getQty());
@@ -306,12 +318,25 @@ public class PurchaseViewController {
                 selectedPurchaseOrder.setOrderDate(newPurchaseOrder.getOrderDate());
                 selectedPurchaseOrder.setStatus(newPurchaseOrder.getStatus());
                 tblPurchases.refresh();
+
             }
 
+            connection.commit();
 
         } catch (SQLException e) {
+            try {
+                DBConnection.getInstance().getConnection().rollback();
+            } catch (SQLException ex) {
+                throw new RuntimeException(ex);
+            }
             new Alert(Alert.AlertType.ERROR, "Failed to save the purchase order, try again!").showAndWait();
             throw new RuntimeException(e);
+        } finally {
+            try {
+                DBConnection.getInstance().getConnection().setAutoCommit(true);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         btnNew.fire();
@@ -375,17 +400,66 @@ public class PurchaseViewController {
         return dataValid;
     }
 
+    private Item findItemByItemCode(int code) {
+        Connection connection = DBConnection.getInstance().getConnection();
+        try {
+            String sql = "SELECT * FROM item WHERE code=?";
+            PreparedStatement stm = connection.prepareStatement(sql);
+            stm.setInt(1, code);
+            ResultSet rst = stm.executeQuery();
+            if (rst.next()) {
+                int itemCode = rst.getInt("code");
+                String description = rst.getString("description");
+                BigDecimal qty = rst.getBigDecimal("qty");
+                String uom = rst.getString("unit_of_measure");
+                BigDecimal alertQty = rst.getBigDecimal("alert_qty");
+                System.out.println(itemCode);
+                return new Item(itemCode, description, qty, uom, alertQty);
+            }
+        } catch (SQLException e) {
+            new Alert(Alert.AlertType.ERROR, "Failed to find item, try again").showAndWait();
+            throw new RuntimeException(e);
+        }
+        return null;
+    }
+
+    private void updateItemStock(BigDecimal qty, int itemCode) throws SQLException {
+        Connection connection = DBConnection.getInstance().getConnection();
+        PreparedStatement stm = connection.prepareStatement("UPDATE item SET qty=? WHERE code=?");
+        stm.setBigDecimal(1, qty);
+        stm.setInt(2, itemCode);
+        stm.executeUpdate();
+    }
+
     public void btnDeleteOnAction(ActionEvent event) {
         PurchaseOrder selectedPurchaseOrder = tblPurchases.getSelectionModel().getSelectedItem();
         ObservableList<PurchaseOrder> purchaseOrdersList = tblPurchases.getItems();
         Connection connection = DBConnection.getInstance().getConnection();
         try {
+            connection.setAutoCommit(false); // Starting a new transaction context
+
             PreparedStatement stm = connection.prepareStatement("DELETE  FROM  purchase_order WHERE  order_id=?");
             stm.setInt(1, selectedPurchaseOrder.getOrderId());
             stm.executeUpdate();
+
+            BigDecimal currentQty = findItemByItemCode(selectedPurchaseOrder.getItemCode()).getQty();
+            updateItemStock(currentQty.subtract(selectedPurchaseOrder.getQty()),selectedPurchaseOrder.getItemCode());
+
+            connection.commit();
         } catch (SQLException e) {
+            try {
+                connection.rollback();
+            } catch (SQLException ex) {
+                throw new RuntimeException(ex);
+            }
             new Alert(Alert.AlertType.ERROR, "Failed to delete the purchase order, try again").showAndWait();
             throw new RuntimeException(e);
+        }finally {
+            try {
+                connection.setAutoCommit(true);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         purchaseOrdersList.remove(selectedPurchaseOrder);
