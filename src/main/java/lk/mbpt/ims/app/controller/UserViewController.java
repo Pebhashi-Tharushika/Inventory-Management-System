@@ -15,11 +15,18 @@ import javafx.scene.paint.Color;
 import lk.mbpt.ims.app.db.DBConnection;
 import lk.mbpt.ims.app.model.User;
 import lk.mbpt.ims.app.util.PasswordEncoder;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.util.JRLoader;
+import net.sf.jasperreports.view.JasperViewer;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.regex.Pattern;
 
 
@@ -291,6 +298,16 @@ public class UserViewController {
         if (event.getCode() == KeyCode.DELETE) btnDelete.fire();
     }
 
-    public void btnReportOnAction(ActionEvent event) {
+    public void btnReportOnAction(ActionEvent event) throws JRException {
+        JasperReport jasperReport = (JasperReport) JRLoader.loadObject(getClass().getResource("/report/users-report.jasper"));
+
+        HashMap<String, Object> reportParams = new HashMap<>();
+        Connection dataSource = DBConnection.getInstance().getConnection();
+
+        String searchText = txtSearch.getText();
+        reportParams.put("q", "%" + searchText + "%");
+
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, dataSource);
+        JasperViewer.viewReport(jasperPrint, false);
     }
 }

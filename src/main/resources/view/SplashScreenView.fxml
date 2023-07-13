@@ -10,7 +10,7 @@
 <AnchorPane prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/19" xmlns:fx="http://javafx.com/fxml/1" fx:controller="lk.mbpt.ims.app.controller.SplashScreenViewController">
    <children>
       <ProgressBar fx:id="prg" layoutX="73.0" layoutY="228.0" prefHeight="12.0" prefWidth="454.0" progress="0.03" />
-      <Label alignment="CENTER" layoutX="130.0" layoutY="338.0" prefHeight="18.0" prefWidth="462.0" text="Copyright © 2022 ABC. All Rights Reserved." AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
+      <Label alignment="CENTER" layoutX="130.0" layoutY="338.0" prefHeight="18.0" prefWidth="462.0" text="Copyright © 2022 MBPT. All Rights Reserved." AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
          <font>
             <Font size="14.0" />
          </font>

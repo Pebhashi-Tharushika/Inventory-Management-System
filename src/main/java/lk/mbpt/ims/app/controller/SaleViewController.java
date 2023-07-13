@@ -17,6 +17,12 @@ import javafx.scene.paint.Color;
 import lk.mbpt.ims.app.db.DBConnection;
 import lk.mbpt.ims.app.model.SaleOrder;
 import lk.mbpt.ims.app.util.Status;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.util.JRLoader;
+import net.sf.jasperreports.view.JasperViewer;
 import org.controlsfx.control.textfield.TextFields;
 
 import java.math.BigDecimal;
@@ -364,6 +370,16 @@ public class SaleViewController {
         if (event.getCode() == KeyCode.DELETE) btnDelete.fire();
     }
 
-    public void btnReportOnAction(ActionEvent event) {
+    public void btnReportOnAction(ActionEvent event) throws JRException {
+        JasperReport jasperReport = (JasperReport) JRLoader.loadObject(getClass().getResource("/report/sales-orders-report.jasper"));
+
+        HashMap<String, Object> reportParams = new HashMap<>();
+        Connection dataSource = DBConnection.getInstance().getConnection();
+
+        String searchText = txtSearch.getText();
+        reportParams.put("q", "%" + searchText + "%");
+
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, dataSource);
+        JasperViewer.viewReport(jasperPrint, false);
     }
 }

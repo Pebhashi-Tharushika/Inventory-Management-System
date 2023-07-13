@@ -81,6 +81,7 @@ public class MainViewController {
 
         Stage stage = new Stage();
         stage.setScene(new Scene(FXMLLoader.load(getClass().getResource("/view/loginView.fxml"))));
+        stage.getIcons().add(new Image("image/logo.png"));
         stage.show();
     }
 

@@ -17,11 +17,18 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import lk.mbpt.ims.app.db.DBConnection;
 import lk.mbpt.ims.app.model.Customer;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.util.JRLoader;
+import net.sf.jasperreports.view.JasperViewer;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.sql.*;
+import java.util.HashMap;
 
 public class CustomerViewController {
     public JFXTextField txtId;
@@ -268,6 +275,16 @@ public class CustomerViewController {
         if (event.getCode() == KeyCode.DELETE) btnDelete.fire();
     }
 
-    public void btnReportOnAction(ActionEvent event) {
+    public void btnReportOnAction(ActionEvent event) throws JRException {
+        JasperReport jasperReport = (JasperReport) JRLoader.loadObject(getClass().getResource("/report/customers-report.jasper"));
+
+        HashMap<String, Object> reportParams = new HashMap<>();
+        Connection dataSource = DBConnection.getInstance().getConnection();
+
+        String searchText = txtSearch.getText();
+        reportParams.put("q", "%" + searchText + "%");
+
+        JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, reportParams, dataSource);
+        JasperViewer.viewReport(jasperPrint, false);
     }
 }
